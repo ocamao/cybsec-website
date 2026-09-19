@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Portfolio de ciberseguridad de Antoni Muñoz — writeups ofensivos y defensivos y camino hacia pentester junior.">
+  <title>Antoni Muñoz — CybSec</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
+
+  <header class="site-header">
+    <nav class="nav container" aria-label="Navegación principal">
+      <a class="brand" href="index.html">
+        <span class="brand__prompt" aria-hidden="true">~$</span> antoni<span class="accent">.sec</span>
+      </a>
+      <button class="nav__toggle" aria-expanded="false" aria-controls="nav-menu">
+        <span class="nav__toggle-bar" aria-hidden="true"></span>
+        <span class="visually-hidden">Abrir menú</span>
+      </button>
+      <ul class="nav__menu" id="nav-menu">
+        <li><a href="index.html" aria-current="page">Inicio</a></li>
+        <li><a href="writeups/index.html">Writeups</a></li>
+        <li><a href="contacto/index.html">Contacto</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- Hero: estética terminal -->
+    <section class="hero container">
+      <p class="hero__kicker">// CybSec Portfolio</p>
+      <h1 class="hero__title">Antoni Muñoz</h1>
+      <p class="hero__subtitle">
+        Analista en transición hacia <strong>pentester junior</strong>.
+        Recientemente certificado en <strong>eJPT</strong> (INE Security).
+      </p>
+      <div class="terminal" role="img" aria-label="Terminal decorativa con resumen del perfil">
+        <div class="terminal__bar" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <pre class="terminal__body"><code>$ whoami
+<span class="accent">antoni.muñoz</span> — eJPT · future OSCP
+
+$ cat objetivos.txt
+[✓] eJPT — INE Security (07/2026)
+[•] CJCA/CPTS en proceso
+[•] Búsqueda primera posición pentesting / SOC junior
+
+$ ls writeups/
+ginger_hmv.md  zen_hmv.md  quick5_hmv.md
+
+$ <span class="cursor" aria-hidden="true">▊</span></code></pre>
+      </div>
+      <div class="hero__actions">
+        <a class="btn btn--primary" href="writeups/index.html">Ver writeups</a>
+      </div>
+    </section>
+
+    <!-- Sobre mí -->
+    <section class="section container" id="sobre-mi">
+      <h2 class="section__title">Sobre mí</h2>
+      <div class="about">
+        <p>
+          Soy una persona <strong>analítica, creativa, proactiva y adaptable</strong>, con gran capacidad
+          de aprendizaje y resolución de problemas. Me acerqué a la ciberseguridad gracias a divulgadores,
+          lo que me animó a llevarlo a la práctica: laboratorios ofensivos y CTFs. Con ganas de ponerlo en
+          práctica de forma profesional en entornos reales.
+        </p>
+        <p>
+          En cada writeup explico el proceso de resolución completo: enumeración, explotación y escalada de
+          privilegios, junto con una sección de <strong>detección y mitigación</strong>, señalando los puntos
+          a corregir desde el punto de vista de diseño/buenas prácticas.
+        </p>
+        <ul class="tags" aria-label="Herramientas habituales">
+          <li>Nmap</li>
+          <li>Burp Suite</li>
+          <li>Gobuster</li>
+          <li>John / Hashcat</li>
+          <li>CrackMapExec</li>
+          <li>Impacket</li>
+          <li>Wireshark</li>
+          <li>Hydra</li>
+          <li>Metasploit</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Destacados -->
+    <section class="section container">
+      <h2 class="section__title">Writeups</h2>
+      <div class="grid grid--3">
+        <article class="card">
+          <p class="card__meta"><span class="badge badge--off">Ofensivo</span> HackMyVM · Difícil</p>
+          <h3 class="card__title"><a href="writeups/ginger.html">Ginger</a></h3>
+          <p class="card__desc">WordPress → SQLi → panel admin → SSTI en Flask → cadena de 4 escaladas hasta root.</p>
+        </article>
+        <article class="card">
+          <p class="card__meta"><span class="badge badge--off">Ofensivo</span> HackMyVM · Difícil</p>
+          <h3 class="card__title"><a href="writeups/zen.html">Zen</a></h3>
+          <p class="card__desc">Credencial oculta en robots.txt → RCE vía ZenPhoto → cadena de sudo → secuestro de PATH.</p>
+        </article>
+        <article class="card">
+          <p class="card__meta"><span class="badge badge--off">Ofensivo</span> HackMyVM · Media</p>
+          <h3 class="card__title"><a href="writeups/quick5.html">Quick5</a></h3>
+          <p class="card__desc">Ataque del lado cliente (macro .odt) → credenciales cifradas de Firefox → root.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p>Antoni Muñoz · Junior Pentester</p>
+      <p class="footer-inner__meta"></p>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
