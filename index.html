@@ -32,10 +32,6 @@
     <section class="hero container">
       <p class="hero__kicker">// CybSec Portfolio</p>
       <h1 class="hero__title">Antoni Muñoz</h1>
-      <p class="hero__subtitle">
-        Analista en transición hacia <strong>pentester junior</strong>.
-        Recientemente certificado en <strong>eJPT</strong> (INE Security).
-      </p>
       <div class="terminal" role="img" aria-label="Terminal decorativa con resumen del perfil">
         <div class="terminal__bar" aria-hidden="true">
           <span></span><span></span><span></span>
@@ -46,7 +42,7 @@
 $ cat objetivos.txt
 [✓] eJPT — INE Security (07/2026)
 [•] CJCA/CPTS en proceso
-[•] Búsqueda primera posición pentesting / SOC junior
+[•] Búsqueda primer puesto pentester junior
 
 $ ls writeups/
 ginger_hmv.md  zen_hmv.md  quick5_hmv.md
@@ -63,31 +59,61 @@ $ <span class="cursor" aria-hidden="true">▊</span></code></pre>
       <h2 class="section__title">Sobre mí</h2>
       <div class="about">
         <p>
-          Soy una persona <strong>analítica, creativa, proactiva y adaptable</strong>, con gran capacidad
-          de aprendizaje y resolución de problemas. Me acerqué a la ciberseguridad gracias a divulgadores,
-          lo que me animó a llevarlo a la práctica: laboratorios ofensivos y CTFs. Con ganas de ponerlo en
-          práctica de forma profesional en entornos reales.
+          Estoy orientando mi carrera hacia la ciberseguridad ofensiva. Actualmente trabajo principalmente 
+	  con laboratorios de pentesting y CTFs, donde practico reconocimiento, enumeración web, explotación 
+	  y escalada de privilegios en entornos Linux y Windows.
         </p>
-        <p>
-          En cada writeup explico el proceso de resolución completo: enumeración, explotación y escalada de
-          privilegios, junto con una sección de <strong>detección y mitigación</strong>, señalando los puntos
-          a corregir desde el punto de vista de diseño/buenas prácticas.
-        </p>
-        <ul class="tags" aria-label="Herramientas habituales">
-          <li>Nmap</li>
-          <li>Burp Suite</li>
-          <li>Gobuster</li>
-          <li>John / Hashcat</li>
-          <li>CrackMapExec</li>
-          <li>Impacket</li>
-          <li>Wireshark</li>
-          <li>Hydra</li>
-          <li>Metasploit</li>
-        </ul>
+	<p>
+	  Mi objetivo es convertir esta práctica en experiencia profesional como junior pentester, participando 
+	  también en tareas de análisis, documentación y remediación.
+	</p>
       </div>
     </section>
 
-    <!-- Destacados -->
+    <section class="section container" aria-labelledby="habilidades-h">
+      <h2 class="section__title" id="habilidades-h">Habilidades</h2>
+      <div class="skills-grid">
+        <article class="skill-group">
+          <h3>Seguridad ofensiva</h3>
+          <ul>
+            <li>Reconocimiento y enumeración de sistemas y servicios</li>
+            <li>Identificación y explotación de vulnerabilidades</li>
+            <li>Obtención de acceso inicial</li>
+            <li>Escalada de privilegios en Linux/Windows</li>
+            <li>Análisis de configuraciones y permisos inseguros</li>
+          </ul>
+        </article>
+        <article class="skill-group">
+          <h3>Seguridad web</h3>
+          <ul>
+            <li>Enumeración de aplicaciones y tecnologías web</li>
+            <li>Pruebas de autenticación y autorización</li>
+            <li>SQL Injection</li>
+            <li>Server-Side Template Injection (SSTI)</li>
+            <li>Análisis de CMS y plugins</li>
+            <li>Explotación de vulnerabilidades de subida de archivos</li>
+          </ul>
+        </article>
+        <article class="skill-group">
+          <h3>Sistemas y redes</h3>
+          <ul>
+            <li>Linux mediante línea de comandos</li>
+            <li>Fundamentos de redes TCP/IP</li>
+            <li>Enrutamiento y pivoting</li>
+            <li>Análisis de servicios de red</li>
+          </ul>
+        </article>
+        <article class="skill-group">
+          <h3>Scripting y herramientas</h3>
+          <ul>
+            <li>Python y Bash para automatización y scripting</li>
+            <li>Nmap · Burp Suite · Gobuster · John the Ripper · Hashcat · Impacket</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <!-- Writeups -->
     <section class="section container">
       <h2 class="section__title">Writeups</h2>
       <div class="grid grid--3">
